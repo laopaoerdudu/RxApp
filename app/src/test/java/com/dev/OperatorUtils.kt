@@ -1,7 +1,5 @@
 package com.dev
 
-import java.lang.Exception
-
 class OperatorUtils {
     companion object {
         fun sleep(time: Long) {
@@ -10,6 +8,10 @@ class OperatorUtils {
             } catch (error: InterruptedException) {
                 error.printStackTrace()
             }
+        }
+
+        fun logThread(name: String) {
+            println(name + " from " + Thread.currentThread().name)
         }
     }
 }

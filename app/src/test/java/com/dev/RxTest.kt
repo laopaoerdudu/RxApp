@@ -1,18 +1,35 @@
 package com.dev
 
+import com.dev.OperatorUtils.Companion.logThread
 import io.reactivex.Observable
 import io.reactivex.ObservableOnSubscribe
+import io.reactivex.functions.Action
 import io.reactivex.functions.BiFunction
+import io.reactivex.functions.Consumer
 import io.reactivex.functions.Function
 import io.reactivex.observables.ConnectableObservable
 import io.reactivex.rxkotlin.subscribeBy
+import io.reactivex.schedulers.Schedulers
 import io.reactivex.schedulers.TestScheduler
 import org.junit.Assert
 import org.junit.Before
 import org.junit.Test
-import org.reactivestreams.Subscriber
 import java.util.HashMap
 import java.util.concurrent.TimeUnit
+import kotlin.Any
+import kotlin.ArithmeticException
+import kotlin.Char
+import kotlin.ClassCastException
+import kotlin.Comparator
+import kotlin.Exception
+import kotlin.Int
+import kotlin.Long
+import kotlin.NullPointerException
+import kotlin.RuntimeException
+import kotlin.String
+import kotlin.Throwable
+import kotlin.arrayOf
+import kotlin.toString
 
 class RxTest {
 
@@ -263,8 +280,7 @@ class RxTest {
     }
 
     @Test
-    fun test_retryWhen_flatMap_timer()
-    {
+    fun test_retryWhen_flatMap_timer() {
         Observable.create(ObservableOnSubscribe<Int> { emitter ->
             emitter.onNext(1)
             emitter.onNext(2)
@@ -308,7 +324,8 @@ class RxTest {
                 },
                 onError = {
                     //onExceptionResumeNext只处理Exception类型的error，其他类型(如Error和Throwable)的异常不进行处理
-                        throwable -> println(throwable.message)
+                        throwable ->
+                    println(throwable.message)
                 }
             )
         println(mList)
@@ -488,4 +505,525 @@ class RxTest {
         println(mList)
     }
 
+    @Test
+    fun test_reduce() {
+        Observable.just(1, 2, 3, 4, 5)
+            .reduce { num1, num2 -> num1 + num2 }
+            .subscribe {
+                mList.add(it)
+            }
+        Assert.assertEquals(mList, listOf(15))
+    }
+
+    @Test
+    fun test_count() {
+        Observable.just(1, 2, 3, 4)
+            .count()
+            .subscribe(Consumer {
+                println(it)
+                mList.add(it)
+            })
+    }
+
+    @Test
+    fun test_concat() {
+        val observable1 =
+            Observable.interval(10, TimeUnit.SECONDS, mTestScheduler)
+                .map { _ -> 1 }
+                .doOnNext {
+                    //println("Observable1 -> map -> doOnNext -> $it")
+                }
+                .take(3)
+
+        val observable2 =
+            Observable.interval(1, TimeUnit.SECONDS, mTestScheduler)
+                .map { _ -> 2 }
+                .doOnNext {
+                    //println("Observable -> map -> doOnNext -> $it")
+                }
+                .take(2)
+
+        Observable.concat(observable1, observable2)
+            .doOnNext(System.out::println)
+            .subscribe {
+                mList.add(it)
+            }
+        mTestScheduler.advanceTimeBy(100, TimeUnit.SECONDS)
+        println(mList)
+    }
+
+    @Test
+    fun test_window() {
+        val list = mutableListOf<Observable<Int>>()
+        Observable.just(1, 2, 3, 4, 5, 6)
+            .window(3)
+            .forEach {
+                list.add(it)
+            }
+        for (i in 0..1) {
+            val observable = list[i]
+            println("$i -> $observable")
+            observable.subscribe(System.out::println)
+        }
+    }
+
+    @Test
+    fun test_scan() {
+        Observable.just(1, 2, 3, 4, 5)
+            .scan { num1, num2 -> num1 + num2 }
+            .doOnNext(System.out::println)
+            .subscribe {
+                mList.add(it)
+            }
+        Assert.assertEquals(listOf(1, 3, 6, 10, 15), mList)
+    }
+
+    @Test
+    fun test_map() {
+        Observable.just(1, 2, 3)
+            .map { integer -> integer * 10 }
+            .subscribe {
+                mList.add(it)
+            }
+        Assert.assertEquals(mList, listOf(10, 20, 30))
+    }
+
+    @Test
+    fun test_groupBy() {
+        Observable.just(1, 2, 130, 3, 150, 999)
+            .groupBy { num ->
+                if (num > 100) {
+                    return@groupBy "big"
+                }
+                "small"
+            }
+            .subscribe { groupedObservable ->
+                groupedObservable.subscribe { value ->
+                    val key = groupedObservable.key
+                    val result = "$key -> $value"
+                    // println(result)
+                    mList.add(result)
+                }
+            }
+        println(mList)
+    }
+
+    @Test
+    fun test_concatMap() {
+        Observable.just(1, 2, 3)
+            .concatMap { num ->
+                Observable.interval((num - 1).toLong(), TimeUnit.SECONDS, mTestScheduler)
+                    .take(3)
+                    .map {
+                        "$it ◇"
+                    }.doOnNext(System.out::println)
+            }.subscribe(Consumer {
+                mList.add(it)
+            })
+        mTestScheduler.advanceTimeBy(10, TimeUnit.SECONDS)
+        println(mList)
+    }
+
+    @Test
+    fun test_flatMap() {
+        Observable.just(1, 2, 3)
+            .flatMap { num ->
+                Observable.interval((num - 1).toLong(), TimeUnit.SECONDS, mTestScheduler)
+                    .take(3)
+                    .map {
+                        "$it ◇"
+                    }//.doOnNext(System.out::println)
+
+            }.subscribe(Consumer {
+                mList.add(it)
+            })
+        mTestScheduler.advanceTimeBy(100, TimeUnit.SECONDS)
+        println(mList)
+    }
+
+    @Test
+    fun test_bufferWithTimeUnit() {
+        Observable.interval(0, 1, TimeUnit.SECONDS, mTestScheduler)
+            .take(6)
+            .buffer(2, TimeUnit.SECONDS, mTestScheduler)
+            .subscribe(Consumer {
+                mList.add(it)
+            })
+        mTestScheduler.advanceTimeBy(10, TimeUnit.SECONDS)
+        println(mList)
+        val expectedList =
+            listOf(
+                listOf(0L, 1L),
+                listOf(2L, 3L),
+                listOf(4L, 5L)
+            )
+        Assert.assertEquals(mList, expectedList)
+    }
+
+    @Test
+    fun test_buffer() {
+        Observable.just(1, 2, 3, 4, 5, 6)
+            .buffer(3)
+            .subscribe(Consumer {
+                mList.add(it)
+            })
+
+        println(mList)
+        val exceptList =
+            listOf(
+                listOf(
+                    1,
+                    2,
+                    3
+                ), listOf(4, 5, 6)
+            )
+        Assert.assertEquals(exceptList, mList)
+    }
+
+    @Test
+    fun test_timestamp() {
+        println("start time -> ${System.currentTimeMillis()}")
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            emit.onNext(1)
+            OperatorUtils.sleep(1000)
+            emit.onNext(2)
+            OperatorUtils.sleep(3000)
+            emit.onNext(3)
+            emit.onComplete()
+        })
+            .timestamp()
+            .subscribe(System.out::println)
+        println("end -> ${System.currentTimeMillis()}")
+    }
+
+    @Test
+    fun test_timeout() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            emit.onNext(1)
+            emit.onNext(2)
+            emit.onNext(3)
+            emit.onNext(4)
+            OperatorUtils.sleep(3000)
+            emit.onNext(5)
+            emit.onComplete()
+        })
+            .subscribeOn(mTestScheduler)
+            .timeout(2, TimeUnit.SECONDS) //java.util.concurrent.TimeoutException:
+            .doOnError(System.out::println) //打印异常信息
+            .subscribeBy(
+                onNext = { num ->
+                    mList.add(num)
+                },
+
+                onError = {
+                    mList.add("throwable")
+                }
+            )
+        mTestScheduler.advanceTimeBy(0, TimeUnit.SECONDS)
+        Assert.assertEquals(listOf(1, 2, 3, 4, "throwable"), mList)
+    }
+
+    @Test
+    fun test_timeInterval() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            OperatorUtils.sleep(500)
+            emit.onNext(1)
+            OperatorUtils.sleep(1000)
+            emit.onNext(2)
+            OperatorUtils.sleep(2000)
+            emit.onNext(3)
+            OperatorUtils.sleep(3000)
+            emit.onComplete()
+        })
+            .take(5)
+            .timeInterval()
+            .subscribe(System.out::println)
+    }
+
+    @Test
+    fun test_subscribeOn_and_observeOn() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            logThread("Emit -> ")
+            emit.onNext(1)
+            emit.onComplete()
+        })
+            .observeOn(Schedulers.io()) //决定了map()的线程
+            .map {
+                logThread("Map operator -> ")
+            }
+            .subscribeOn(Schedulers.newThread()) //决定了消息源的线程
+            .observeOn(Schedulers.computation()) //决定了订阅者的线程
+            .subscribe {
+                logThread("subscriber -> ")
+            }
+
+        //保证所有线程正常执行完毕
+        OperatorUtils.sleep(1000)
+    }
+
+    @Test
+    fun subscribeOn() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            logThread("emit -> ")
+            emit.onNext(1)
+            emit.onComplete()
+        }).subscribeOn(Schedulers.newThread())
+            .observeOn(Schedulers.computation())
+            .subscribe(Consumer {
+                logThread("subscribe -> ")
+            })
+    }
+
+    @Test
+    fun test_subscribe() {
+        Observable.just(1, 2, 3)
+            .subscribeBy(
+                onNext = {
+                    mList.add(it)
+                },
+                onError = {
+                    mList.add("Error")
+                },
+                onComplete = {
+                    mList.add("Complete")
+                }
+            )
+        Assert.assertEquals(listOf(1, 2, 3, "Complete"), mList)
+    }
+
+    @Test
+    fun test_observeOn() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            emit.onNext(1)
+            emit.onComplete()
+        }).observeOn(Schedulers.newThread())
+            .subscribe {
+                OperatorUtils.logThread("subscribe -> ")
+            }
+    }
+
+    @Test
+    fun test_materialize() {
+        Observable.just(1, 2)
+            .materialize()
+            .doOnNext(System.out::println)
+            .subscribe { notification ->
+                mList.add(
+                    notification.value.toString()
+                )
+            }
+        Assert.assertEquals(
+            listOf("1", "2", "null"),
+            mList
+        )
+    }
+
+    @Test
+    fun doAfterTerminate() {
+        Observable.just(1, 2, 3, 4, 5, 6)
+            .doAfterTerminate { mList.add("doAfterTerminate") }
+            .subscribe(Consumer { i ->
+                mList.add(i)
+            })
+        Assert.assertEquals(
+            mList,
+            listOf(1, 2, 3, 4, 5, 6, "doAfterTerminate")
+        )
+    }
+
+    @Test
+    fun test_doOnTerminate() {
+        Observable.just(1)
+            .doOnTerminate { mList.add("doOnTerminate by Completed") }
+            .subscribe()
+
+        Observable.create(ObservableOnSubscribe<String> { emit ->
+            emit.onError(Exception("null"))
+        }).doOnTerminate(Action {
+            mList.add("doOnTerminate by Error")
+        }).subscribeBy(
+            onError = {},
+            onNext = {}
+        )
+
+        Assert.assertEquals(
+            mList,
+            listOf(
+                "doOnTerminate by Completed",
+                "doOnTerminate by Error"
+            )
+        )
+    }
+
+    @Test
+    fun doOnEach_doOnError() {
+        Observable.create(ObservableOnSubscribe<Int> { emit ->
+            emit.onNext(1)
+            emit.onNext(5 / 0)
+        })
+            .doOnEach(Consumer { notification ->
+                val actionName: String = notification.value.toString()
+                println("doOnEach -> $actionName")
+            })
+            .doOnError(Consumer { throwable ->
+                println("doOnError -> ${throwable.message}")
+            })
+            .subscribeBy(
+                onNext = { num ->
+                    println("subscribe onNext -> $num")
+                },
+                onError = { throwable ->
+                    println("subscribe onError -> ${throwable.message}")
+                },
+                onComplete = {
+                    println("subscribeBy Done")
+                }
+            )
+    }
+
+    @Test
+    fun test_delaySubscription() {
+        Observable.just(888)
+            .delaySubscription(5, TimeUnit.SECONDS, mTestScheduler)
+            .doOnSubscribe { println("o1 -> doOnSubscribe") }
+            .doOnNext(System.out::println)
+            .subscribe(Consumer { i ->
+                mList.add(i)
+            })
+
+        //延时2s订阅，此数据流会先被订阅
+        Observable.just(666)
+            .delaySubscription(2, TimeUnit.SECONDS, mTestScheduler)
+            .doOnSubscribe { println("o2 -> doOnSubscribe") }
+            .doOnNext(System.out::println)
+            .subscribe(Consumer { i ->
+                mList.add(i)
+            })
+        mTestScheduler.advanceTimeBy(6, TimeUnit.SECONDS)
+        Assert.assertEquals(mList, listOf(666, 888))
+    }
+
+    @Test
+    fun test_delayWithSelector() {
+        Observable.just(1, 2, 3)
+            .delay { integer ->
+                Observable.timer(
+                    (integer * 20).toLong(),
+                    TimeUnit.SECONDS,
+                    mTestScheduler//Schedulers.newThread()
+                )
+            }
+            .subscribe(Consumer { i ->
+                println(i)
+                mList.add(i)
+            })
+        mTestScheduler.advanceTimeTo(20, TimeUnit.SECONDS)
+        Assert.assertEquals(mList, listOf(1))
+        mTestScheduler.advanceTimeTo(40, TimeUnit.SECONDS)
+        Assert.assertEquals(mList, listOf(1, 2))
+    }
+
+    @Test
+    fun test_delay() {
+        Observable.just(1, 2, 1)
+            .delay(3000, TimeUnit.SECONDS, mTestScheduler)
+            .subscribe(Consumer { i ->
+                mList.add(i)
+            })
+        mTestScheduler.advanceTimeBy(2000, TimeUnit.SECONDS)
+        println("after 2000ms -> $mList")
+        Assert.assertTrue(mList.isEmpty())
+        mTestScheduler.advanceTimeBy(1000, TimeUnit.SECONDS)
+        println("after 3000ms -> $mList")
+        Assert.assertEquals(mList, listOf(1, 2, 1))
+    }
+
+    @Test
+    fun test_thread_with_TestScheduler() {
+        val testScheduler: TestScheduler = TestScheduler()
+        println("测试线程：" + Thread.currentThread().name)
+
+        //指定调度器
+        Observable.timer(3, TimeUnit.SECONDS, testScheduler)
+            .subscribe { num ->
+                println("subscribe thread -> " + Thread.currentThread().name)
+                println("获取订阅数据：$num")
+            }
+
+        //将时间提前了3s
+        testScheduler.advanceTimeBy(3, TimeUnit.SECONDS)
+    }
+
+    @Test
+    fun combiningOperator_thread_way2() {
+        val testScheduler = TestScheduler()
+
+        val observable1: Observable<Int> = Observable.create(ObservableOnSubscribe<Int> { emit ->
+            println("observable1 -> " + Thread.currentThread().name)
+
+            emit.onNext(1)
+            OperatorUtils.sleep(500)
+
+            emit.onNext(2)
+            OperatorUtils.sleep(1500)
+
+            emit.onNext(3)
+            OperatorUtils.sleep(250)
+
+            emit.onNext(4)
+            OperatorUtils.sleep(500)
+
+            emit.onNext(5)
+            emit.onComplete()
+        }).subscribeOn(testScheduler)
+
+        val observable2: Observable<Int> = Observable.create(ObservableOnSubscribe<Int> { emit ->
+            OperatorUtils.sleep(200)
+            println("observable2-->" + Thread.currentThread().name)
+            emit.onNext(1111);
+            emit.onNext(2222);
+            emit.onNext(3333);
+            emit.onComplete()
+        }).subscribeOn(Schedulers.newThread())
+
+        Observable.merge(observable1, observable2).subscribe(System.out::println)
+        //并将时钟提前
+        testScheduler.advanceTimeBy(1, TimeUnit.MILLISECONDS)
+    }
+
+    @Test
+    fun combiningOperator_thread_way1() {
+        val observable1: Observable<Int> = Observable.create(ObservableOnSubscribe<Int> { emit ->
+            println("observable1 -> " + Thread.currentThread().name)
+
+            emit.onNext(1)
+            OperatorUtils.sleep(500)
+
+            emit.onNext(2)
+            OperatorUtils.sleep(1500)
+
+            emit.onNext(3)
+            OperatorUtils.sleep(250)
+
+            emit.onNext(4)
+            OperatorUtils.sleep(500)
+
+            emit.onNext(5)
+            emit.onComplete()
+        }).subscribeOn(Schedulers.newThread())
+
+        val observable2: Observable<Int> = Observable.create(ObservableOnSubscribe<Int> { emit ->
+            OperatorUtils.sleep(200)
+            println("observable2-->" + Thread.currentThread().name)
+            emit.onNext(1111);
+            emit.onNext(2222);
+            emit.onNext(3333);
+            emit.onComplete()
+        }).subscribeOn(Schedulers.newThread())
+
+        Observable.merge(observable1, observable2).subscribe(System.out::println)
+
+        //测试线程休眠一定时间，保证两个消息源所在线程能正常执行完毕
+        OperatorUtils.sleep(5000)
+    }
 }
