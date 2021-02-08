@@ -4,18 +4,21 @@ import com.dev.OperatorUtils.Companion.logThread
 import io.reactivex.Flowable
 import io.reactivex.Observable
 import io.reactivex.ObservableOnSubscribe
+import io.reactivex.android.plugins.RxAndroidPlugins
 import io.reactivex.functions.Action
 import io.reactivex.functions.BiFunction
 import io.reactivex.functions.Consumer
 import io.reactivex.functions.Function
 import io.reactivex.observables.ConnectableObservable
 import io.reactivex.observers.TestObserver
+import io.reactivex.plugins.RxJavaPlugins
 import io.reactivex.rxkotlin.subscribeBy
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.schedulers.TestScheduler
 import io.reactivex.subscribers.TestSubscriber
 import org.junit.Assert
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import java.util.HashMap
 import java.util.concurrent.TimeUnit
@@ -38,6 +41,9 @@ class RxTest {
 
     private lateinit var mTestScheduler: TestScheduler
     private lateinit var mList: MutableList<Any>
+
+    @Rule
+    val rule = RxJavaRule()
 
     @Before
     fun setUp() {
