@@ -42,9 +42,6 @@ class RxTest {
     private lateinit var mTestScheduler: TestScheduler
     private lateinit var mList: MutableList<Any>
 
-    @Rule
-    val rule = RxJavaRule()
-
     @Before
     fun setUp() {
         mTestScheduler = TestScheduler()
@@ -1064,6 +1061,9 @@ class RxTest {
         testSubscriber.assertComplete()
     }
 
+    //测试这种有关时间的操作符，使用异步转同步的思路(RxJavaRule),但是这样我们的测试方法也要等待10s
+    //所以还是沿用以下的测试方法，TestScheduler完成对时间的操控
+
     @Test
     fun test_interval_2() {
         val testSubscriber = TestSubscriber<Long>()
@@ -1159,12 +1159,16 @@ class RxTest {
         //依次发射A，B，C
         Flowable.just("A", "B", "C").subscribe(testSubscriber)
 
+        //断言值是否不存在
+        testSubscriber.assertNever("D")
+
         //断言值是否相等
         testSubscriber.assertValues("A", "B", "C")
 
         //断言值的数量是否相等
         testSubscriber.assertValueCount(3)
         testSubscriber.assertComplete()
+        testSubscriber.assertTerminated()
     }
 
     @Test
